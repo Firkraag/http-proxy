@@ -1,5 +1,6 @@
 /* $begin csapp.c */
 #include "csapp.h"
+#define WRITEN
 
 /************************** 
  * Error-handling functions
@@ -429,6 +430,19 @@ void Connect(int sockfd, struct sockaddr *serv_addr, int addrlen)
  * DNS interface wrappers 
  ***********************/
 
+/* $begin gethostbyname_r */
+int Gethostbyname_r(const char *name, struct hostent *ret, char *buf, size_t buflen, struct hostent **result, int *h_errnop)
+{
+	int p;
+
+    p = gethostbyname_r(name, ret, buf, buflen, result, h_errnop);
+	if (p)
+		dns_error("Gethostbyname error");
+    return p;
+}
+/* $end gethostbyname_r */
+
+
 /* $begin gethostbyname */
 struct hostent *Gethostbyname(const char *name) 
 {
@@ -439,6 +453,19 @@ struct hostent *Gethostbyname(const char *name)
     return p;
 }
 /* $end gethostbyname */
+
+int Gethostbyaddr_r(const char *addr, int len, int type, 
+ struct hostent *ret, char *buf, size_t buflen,
+                struct hostent **result, int *h_errnop)
+
+{
+     int p;
+
+    p = gethostbyaddr_r(addr, len, type, ret, buf, buflen, result, h_errnop);
+	if (p)
+		dns_error("Gethostbyaddr error");
+    return p;
+}
 
 struct hostent *Gethostbyaddr(const char *addr, int len, int type) 
 {
@@ -560,8 +587,15 @@ ssize_t rio_writen(int fd, void *usrbuf, size_t n)
 
     while (nleft > 0) {
 	if ((nwritten = write(fd, bufp, nleft)) <= 0) {
+		#ifdef WRITEN
+		printf("write errno = %d\n", errno);
+		#endif
 	    if (errno == EINTR)  /* interrupted by sig handler return */
 		nwritten = 0;    /* and call write() again */
+		if (errno == EPIPE)
+		{
+			return n;
+		}
 	    else
 		return -1;       /* errno set by write() */
 	}
@@ -747,15 +781,18 @@ ssize_t Rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen)
 int open_clientfd(char *hostname, int port) 
 {
     int clientfd;
+	int ret;
+    struct hostent host;
     struct hostent *hp;
     struct sockaddr_in serveraddr;
+	char buf[8096];
 
     if ((clientfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	return -1; /* check errno for cause of error */
 
 //	printf("hostname is %s\n", hostname);
     /* Fill in the server's IP address and port */
-    if ((hp = gethostbyname(hostname)) == NULL)
+    if (gethostbyname_r(hostname, &host, buf, 8096, &hp, &ret))
 	return -2; /* check h_errno for cause of error */
 //	printf("All right\n");
     bzero((char *) &serveraddr, sizeof(serveraddr));
