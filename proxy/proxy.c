@@ -4,6 +4,9 @@
  */
 #include "csapp.h"
 
+#define THREAD 1
+#define IMAGE 1
+
 void doit(int fd);
 void copy_requesthdrs(rio_t *rp, char *proxy, char *host, char *port, int *image); 
 int check_host_port(char *buf, char *host, char *port);
@@ -16,6 +19,7 @@ int main(int argc, char **argv)
 {
     int listenfd, *clientfd, port, clientlen;
     struct sockaddr_in clientaddr;
+	pthread_t tid;
 
     /* Check command line args */
     if (argc != 2) {
@@ -29,7 +33,7 @@ int main(int argc, char **argv)
 		clientlen = sizeof(clientaddr);
 		*clientfd = Accept(listenfd, (SA *)&clientaddr, &clientlen); //line:netp:tiny:accept
 //		printf("connfd = %d\n", connfd);
-		thread((void *) clientfd);
+		Pthread_create(&tid, NULL, thread, (void *) clientfd);
     }
 	Close(listenfd);
 }
@@ -57,20 +61,30 @@ void doit(int clientfd)
     Rio_readinitb(&rio_client, clientfd);
 	Rio_readlineb(&rio_client, buf, MAXLINE);
 	sscanf(buf, "%s %s %s", method, uri, version);
+	#ifdef THREAD
+	printf("method: %s\n", method);
+	printf("uri: %s\n", uri);
+	printf("version: %s\n", version);
+	#endif
+	#ifndef IMAGE
 	if (strcasestr(uri, ".png") || strcasestr(uri, ".jpeg") || strcasestr(uri, ".jpg") || strcasestr(uri, "gif"))
 		return;
-	printf("uri: %s\n", uri);
+	#endif
 	location = uri;
 	if (location = strstr(uri, "//"))
 		location = index(location + 2, '/');
 	sprintf(proxy, "%s %s %s\r\n", method, location, version);
     copy_requesthdrs(&rio_client, proxy, host, port, &image);
+	#ifndef IMAGE
 	if (image)
 	{
 		printf("No image\n");
 		return;
 	}
+	#endif
+	#ifdef DEBUG
 	printf("host: %s\tport: %s\n", host, port);
+	#endif
 	if (host[0] == '\0')
 		return;								//line:netp:doit:readrequesthdrs
 	if (!strcasecmp(method, "POST"))
@@ -80,12 +94,16 @@ void doit(int clientfd)
 	proxyfd = Open_clientfd(host, atoi(port));	
     Rio_readinitb(&rio_proxy, proxyfd);
 	Rio_writen(proxyfd, proxy, strlen(proxy)); 
+	#ifdef DEBUG
 	printf("%s\n", proxy);
+	#endif
 	proxy[0] = '\0';
 	copy_resphdrs(&rio_proxy, proxy, &content_length);
 	Rio_writen(clientfd, proxy, strlen(proxy));
+	#ifdef DEBUG
 	printf("%s\n", proxy); 
 	printf("%d\n", content_length);
+	#endif
 	proxy[0] = '\0';
 	inter = (char *) Malloc(content_length);
 	Rio_readnb(&rio_proxy, inter, content_length);

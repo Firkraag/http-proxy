@@ -587,11 +587,15 @@ static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n)
     int cnt;
 
     while (rp->rio_cnt <= 0) {  /* refill if buf is empty */
+		#ifdef DEBUG
 		printf("fill buffer\n");
+		#endif
 		rp->rio_cnt = read(rp->rio_fd, rp->rio_buf, 
 			   sizeof(rp->rio_buf));
+		#ifdef DEBUG
 		printf("rp->rio_cnt = %d\n", rp->rio_cnt);
 		printf("What happens here?\n");
+		#endif
 		if (rp->rio_cnt < 0) {
 			if (errno != EINTR) /* interrupted by sig handler return */
 			return -1;
@@ -602,7 +606,9 @@ static ssize_t rio_read(rio_t *rp, char *usrbuf, size_t n)
 			rp->rio_bufptr = rp->rio_buf; /* reset buffer ptr */
     }
 
+	#ifdef DEBUG
 	printf("Copy from internal buf to user buf\n");
+	#endif
     /* Copy min(n, rp->rio_cnt) bytes from internal buf to user buf */
     cnt = n;          
     if (rp->rio_cnt < n)   
@@ -662,29 +668,23 @@ ssize_t rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen)
     char c, *bufp = usrbuf;
 
 
-	printf("a\n");
     for (n = 1; n < maxlen; n++) { 
-	printf("b\n");
 	if ((rc = rio_read(rp, &c, 1)) == 1) {
-		printf("character: %c\n", c);
 	    *bufp++ = c;
 	    if (c == '\n')
 			break;
 	} else if (rc == 0) {
 	    if (n == 1)
 		{
-			printf("d\n");
 			return 0; /* EOF, no data read */
 		}
 	    else
 		{
-			printf("e\n");
 			break;    /* EOF, some data was read */
 		}
 	}
 	 else
 	{
-		printf("f\n");
 	    return -1;	  /* error */
     }
 	}
